@@ -28,7 +28,7 @@ For instance, if I wanted to run the label generator on test.mp4 which is in the
 python3 label_generator.py test.mp4
 ```
 3) A new window will pop up, allowing you to review the video frame-by-frame.
-4) Press any key to advance a frame (you can also hold any key to rapidly advance through frames)
+4) Press any key to advance a frame (you can also hold any key to rapidly advance through frames).
 5) When you want to mark the start of an attempt, press '1'
 6) When you want to mark the end of an attempt, press '2' 
 
