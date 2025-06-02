@@ -1,2 +1,5 @@
-/test.mp4
+**/*.mp4
+
+**/*.csv
+
 venv
