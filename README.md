@@ -31,10 +31,12 @@ python3 label_generator.py test.mp4
 4) Press any key to advance a frame (you can also hold any key to rapidly advance through frames)
 5) When you want to mark the start of an attempt, press '1'
 6) When you want to mark the end of an attempt, press '2' 
+
    NOTE: A new row for the attempt will be appended to the resulting csv file after the script finishes.
-7) Press 'r' ro rewind (holding r to rapidly move backward through frames also works)
+8) Press 'r' ro rewind (holding r to rapidly move backward through frames also works)
+
    NOTE: While rewinding, if you rewind past where an attempt spans, that attempt will automatically be deleted off of the resulting csv file. For instance, if Attempt 4 lasted from frame 50 to 100, and you rewinded to before frame 100, Attempt 4 will be erased.
-8) The script will automatically generate a csv file of all the attempts noted in each row when you get to the end of the video. It will have the name [video_name]_attempt_ground_truth.csv
+10) The script will automatically generate a csv file of all the attempts noted in each row when you get to the end of the video. It will have the name [video_name]_attempt_ground_truth.csv
 
 
 
