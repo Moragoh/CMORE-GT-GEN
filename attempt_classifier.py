@@ -31,6 +31,10 @@ def main():
     # Read the input CSV
     try:
         df = pd.read_csv(csv_file)
+        # Convert frame columns to integers
+        df['attempt_start_frame'] = df['attempt_start_frame'].astype(int)
+        df['attempt_end_frame'] = df['attempt_end_frame'].astype(int)
+        df['attempt_number'] = df['attempt_number'].astype(int)
         print(f"Loaded {len(df)} attempts from {csv_file}")
     except Exception as e:
         print(f"Error reading CSV file: {e}")
@@ -59,7 +63,7 @@ def main():
     print(f"Output will be saved to: {output_csv}")
     print("\nControls:")
     print("- Press '1' to classify as block_dropped = 1")
-    print("- Press '2' to classify as block_dropped = 0") 
+    print("- Press '2' to classify as block_dropped = 2") 
     print("- Press 'q' to quit (progress will be saved)")
     print("\nStarting classification...")
     
@@ -107,7 +111,7 @@ def main():
                 cv2.putText(frame, info_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
                 
                 # Show frame range info
-                range_text = f"Range: {start_frame}-{end_frame} | Press 1 to mark as block drop positive, or 2 to mark as negative"
+                range_text = f"Range: {start_frame}-{end_frame} | Press 1 or 2 to classify"
                 cv2.putText(frame, range_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
                 
                 # Display the frame
