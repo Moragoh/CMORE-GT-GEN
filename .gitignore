@@ -1,4 +1,6 @@
+# Video files
 **/*.mp4
+**/*.mov
 
 **/*.csv
 
