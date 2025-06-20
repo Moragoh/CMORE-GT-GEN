@@ -62,6 +62,7 @@ def main():
     print("\nControls:")
     print("- Press '1' to classify as ground_truth_block_drop = 1 (block fell)")
     print("- Press '0' to classify as ground_truth_block_drop = 0 (block did not fall)") 
+    print("- Press '2' to flag this attempt") 
     print("- Press 'q' to quit (progress will be saved)")
     print("\nStarting classification...")
     
@@ -86,7 +87,7 @@ def main():
         
         print(f"\n--- Classifying Attempt {attempt_num} ---")
         print(f"Frames {start_frame} to {end_frame} ({start_time:.2f}s to {end_time:.2f}s)")
-        print("Looping until you press 1 or 0...")
+        print("Looping until user input...")
         
         classified = False
         falling_block_value = None
@@ -113,7 +114,7 @@ def main():
                 cv2.putText(frame, info_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
                 
                 # Show frame range info
-                range_text = f"Range: {start_frame}-{end_frame} | Press 1 (fell) or 0 (no fall)"
+                range_text = f"Range: {start_frame}-{end_frame} | Press 0 (no drop) or 1 (drop) or 2 (flag attempt) "
                 cv2.putText(frame, range_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
                 
                 # Display the frame
@@ -136,8 +137,11 @@ def main():
                     falling_block_value = 0
                     classified = True
                     print(f"Attempt {attempt_num} classified as ground_truth_block_drop = 0 (block did not fall)")
+                elif key == ord('2'):
+                    falling_block_value = 2
+                    classified = True
+                    print(f"Attempt {attempt_num} flagged for review")
                     break
-                
                 current_frame += 1
             
             # If we've reached the end of the segment without classification, loop back
