@@ -106,7 +106,6 @@ def main():
             if attempt_start_frame is not None:
                 attempt_end_frame = current_frame
                 attempt_end_time = current_time
-                
                 # Write to CSV
                 with open(csv_file, 'a', newline='') as f:
                     writer = csv.writer(f)
