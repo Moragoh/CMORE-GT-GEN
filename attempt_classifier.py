@@ -27,10 +27,14 @@ def main():
     # Create output CSV filename
     csv_name = os.path.splitext(os.path.basename(csv_file))[0]
     output_csv = f"{csv_name}_ground_truth.csv"
+    output_csv = f"{csv_name}_ground_truth.csv"
     
     # Read the input CSV
     try:
         df = pd.read_csv(csv_file)
+        # Convert frame columns to integers
+        df['Start Frame index'] = df['Start Frame index'].astype(int)
+        df['End Frame index'] = df['End Frame index'].astype(int)
         # Convert frame columns to integers
         df['Start Frame index'] = df['Start Frame index'].astype(int)
         df['End Frame index'] = df['End Frame index'].astype(int)
@@ -40,6 +44,7 @@ def main():
         sys.exit(1)
     
     # Validate required columns
+    required_columns = ['Start Frame index', 'End Frame index']
     required_columns = ['Start Frame index', 'End Frame index']
     for col in required_columns:
         if col not in df.columns:
@@ -72,6 +77,11 @@ def main():
     if 'ground_truth_block_drop' not in output_columns:
         output_columns.append('ground_truth_block_drop')
     
+    output_columns = list(df.columns)
+    # Update the ground_truth_block_drop column or add it if it doesn't exist
+    if 'ground_truth_block_drop' not in output_columns:
+        output_columns.append('ground_truth_block_drop')
+    
     if not os.path.exists(output_csv):
         with open(output_csv, 'w', newline='') as f:
             writer = csv.writer(f)
@@ -84,12 +94,18 @@ def main():
         end_frame = int(row['End Frame index'])
         start_time = start_frame / fps
         end_time = end_frame / fps
+        attempt_num = index + 1  # Use row index + 1 as attempt number
+        start_frame = int(row['Start Frame index'])
+        end_frame = int(row['End Frame index'])
+        start_time = start_frame / fps
+        end_time = end_frame / fps
         
         print(f"\n--- Classifying Attempt {attempt_num} ---")
         print(f"Frames {start_frame} to {end_frame} ({start_time:.2f}s to {end_time:.2f}s)")
         print("Looping until user input...")
         
         classified = False
+        falling_block_value = None
         falling_block_value = None
         
         while not classified:
@@ -130,7 +146,9 @@ def main():
                     sys.exit(0)
                 elif key == ord('1'):
                     falling_block_value = 1
+                    falling_block_value = 1
                     classified = True
+                    print(f"Attempt {attempt_num} classified as ground_truth_block_drop = 1 (block fell)")
                     print(f"Attempt {attempt_num} classified as ground_truth_block_drop = 1 (block fell)")
                     break
                 elif key == ord('0'):
@@ -152,11 +170,17 @@ def main():
         output_row = row.copy()
         output_row['ground_truth_block_drop'] = falling_block_value
         
+        # Prepare output row - update existing ground_truth_block_drop value or add new one
+        output_row = row.copy()
+        output_row['ground_truth_block_drop'] = falling_block_value
+        
         # Write the classified attempt to output CSV
         with open(output_csv, 'a', newline='') as f:
             writer = csv.writer(f)
             writer.writerow(output_row.values)
+            writer.writerow(output_row.values)
         
+        print(f"✓ Attempt {attempt_num} saved with ground_truth_block_drop = {falling_block_value}")
         print(f"✓ Attempt {attempt_num} saved with ground_truth_block_drop = {falling_block_value}")
     
     # Clean up
