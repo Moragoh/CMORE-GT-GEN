@@ -68,7 +68,7 @@ TIP: Hold down the key to move through the video rapidly.
 4) Press '0' to mark this attempt as a negative block drop, '1' to mark it as a positive block drop, and '2' to flag it for review. 
 NOTE: More information on the flagging option will be detailed in the "Flagging Options" Section.
 
-NOTE: Once a key is pressed, the script will move onto the next interval. The current attempt will continue looping until a decision by the user has been made.
+NOTE: Once a decision has been made, the script will move onto the next interval. 
 
 5) When you have proccessed all the attempts, a new csv file by the name of [name of original csv file]_classified.csv will automatically be generated. This is the final ground truth file that contains when each attempt happens and whether or not the attempt was successful.
 
