@@ -101,6 +101,8 @@ def main():
         reason_for_flag = ""
         current_frame = start_frame  # Start at the beginning of the attempt
         flag_menu_active = False
+        custom_input_mode = False
+        custom_text = ""
         
         while not classified:
             # Ensure current_frame stays within bounds
@@ -145,12 +147,13 @@ def main():
             cv2.putText(frame, classify_text, (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
             
             # Show flag menu if active
-            if flag_menu_active:
+            if flag_menu_active and not custom_input_mode:
                 flag_options = [
                     "Flag Options:",
                     "w: Block transferred, fingers did not cross",
                     "e: Block transferred, fingers might not have crossed", 
                     "r: Needs manual review",
+                    "t: Custom reason (type your own)",
                     "2: Back to main menu"
                 ]
                 
@@ -164,6 +167,29 @@ def main():
                     # Draw text
                     cv2.putText(frame, option, (10, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
             
+            # Show custom input interface if in custom input mode
+            if custom_input_mode:
+                # Title prompt
+                prompt_text = "Type custom reason for flagging:"
+                y_pos = 130
+                (text_width, text_height), baseline = cv2.getTextSize(prompt_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+                cv2.rectangle(frame, (10, y_pos - text_height - 5), (10 + text_width + 5, y_pos + baseline + 5), (0, 0, 255), -1)
+                cv2.putText(frame, prompt_text, (10, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                
+                # Text input box showing what user has typed
+                input_display = f"Input: {custom_text}|"  # | acts as cursor
+                y_pos2 = y_pos + 35
+                (text_width2, text_height2), baseline2 = cv2.getTextSize(input_display, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
+                cv2.rectangle(frame, (10, y_pos2 - text_height2 - 3), (10 + text_width2 + 5, y_pos2 + baseline2 + 3), (255, 255, 255), -1)
+                cv2.putText(frame, input_display, (10, y_pos2), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
+                
+                # Instructions
+                instruction_text = "Press Enter to submit | Press Esc to cancel"
+                y_pos3 = y_pos2 + 30
+                (text_width3, text_height3), baseline3 = cv2.getTextSize(instruction_text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
+                cv2.rectangle(frame, (10, y_pos3 - text_height3 - 3), (10 + text_width3 + 5, y_pos3 + baseline3 + 3), (0, 0, 255), -1)
+                cv2.putText(frame, instruction_text, (10, y_pos3), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+            
             # Display the frame
             cv2.imshow('Attempt Classifier', frame)
             
@@ -175,22 +201,22 @@ def main():
                 cap.release()
                 cv2.destroyAllWindows()
                 sys.exit(0)
-            elif key == ord('j'):  # Go back 1 frame
+            elif key == ord('j') and not custom_input_mode:  # Go back 1 frame
                 current_frame -= 1
                 if current_frame < start_frame:
                     current_frame = start_frame
                     print(f"At start of attempt (frame {start_frame})")
-            elif key == ord('k'):  # Advance 1 frame
+            elif key == ord('k') and not custom_input_mode:  # Advance 1 frame
                 current_frame += 1
                 if current_frame > end_frame:
                     current_frame = end_frame
                     print(f"At end of attempt (frame {end_frame})")
-            elif key == ord('h'):  # Go back 10 frames
+            elif key == ord('h') and not custom_input_mode:  # Go back 10 frames
                 current_frame -= 10
                 if current_frame < start_frame:
                     current_frame = start_frame
                     print(f"At start of attempt (frame {start_frame})")
-            elif key == ord('l'):  # Advance 10 frames
+            elif key == ord('l') and not custom_input_mode:  # Advance 10 frames
                 current_frame += 10
                 if current_frame > end_frame:
                     current_frame = end_frame
@@ -207,12 +233,16 @@ def main():
                 if flag_menu_active:
                     # Go back to main menu
                     flag_menu_active = False
+                    custom_input_mode = False
+                    custom_text = ""
                     print("Returned to main menu")
                 else:
                     # Open flag menu
                     flag_menu_active = True
+                    custom_input_mode = False
+                    custom_text = ""
                     print("Flag menu opened")
-            elif flag_menu_active:
+            elif flag_menu_active and not custom_input_mode:
                 # Handle flag menu options
                 if key == ord('w'):
                     falling_block_value = 2
@@ -232,6 +262,32 @@ def main():
                     reason_for_flag = "Needs manual review"
                     classified = True
                     print(f"Attempt {attempt_num} flagged: {reason_for_flag}")
+                elif key == ord('t'):
+                    # Enter custom input mode
+                    custom_input_mode = True
+                    custom_text = ""
+                    print("Custom input mode activated")
+            elif custom_input_mode:
+                # Handle custom input mode
+                if key == 27:  # Escape key
+                    # Go back to flag menu
+                    custom_input_mode = False
+                    custom_text = ""
+                    print("Returned to flag menu")
+                elif key == 13:  # Enter key
+                    if custom_text.strip():
+                        falling_block_value = 5
+                        is_flagged = 1
+                        reason_for_flag = custom_text.strip()
+                        classified = True
+                        print(f"Attempt {attempt_num} flagged with custom reason: {reason_for_flag}")
+                    else:
+                        print("No text entered, staying in custom input mode")
+                elif key == 8 or key == 127:  # Backspace (different systems use different codes)
+                    if custom_text:
+                        custom_text = custom_text[:-1]
+                elif key >= 32 and key <= 126:  # Printable ASCII characters
+                    custom_text += chr(key)
         
         # Prepare output row - update existing values or add new ones
         output_row = row.copy()
