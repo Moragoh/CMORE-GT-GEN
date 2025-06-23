@@ -66,6 +66,7 @@ NOTE: Press 'j' to go back 1 frame, and 'k' to go forward 1 frame. Press 'h' to 
 TIP: Hold down the key to move through the video rapidly. 
 
 4) Press '0' to mark this attempt as a negative block drop, '1' to mark it as a positive block drop, and '2' to flag it for review. 
+
 NOTE: More information on the flagging option will be detailed in the "Flagging Options" Section.
 
 NOTE: Once a decision has been made, the script will move onto the next interval. 
