@@ -49,7 +49,7 @@ def draw_thresholds(frame, above_threshold_y, below_threshold_y):
     # Get the dimensions of the frame
     height, width, _ = frame.shape
 
-    # Define colors in BGR format
+    # Define colors in 
     RED = (0, 0, 255)   # (Blue, Green, Red)
     BLUE = (255, 0, 0)  # (Blue, Green, Red)
     
