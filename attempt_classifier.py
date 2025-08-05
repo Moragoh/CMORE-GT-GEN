@@ -15,7 +15,7 @@ def main():
     csv_file = sys.argv[1]
     video_path = sys.argv[2]
     
-    # Check if files exist
+    # Check if files existp
     if not os.path.exists(csv_file):
         print(f"Error: CSV file '{csv_file}' not found.")
         sys.exit(1)
