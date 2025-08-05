@@ -5,20 +5,23 @@ import csv
 import sys
 import os
 from pathlib import Path
-from keypoint_detector import BoxDetector
+from keypoint_detector import BoxDetector # Assuming this module is available
 
 def get_box(frame, box_detector: BoxDetector, width, height):
+    """
+    Detects keypoints for a box on the frame and returns y-coordinates for two thresholds.
+    Handles guessing missing keypoints if initial detection is not fully successful.
+    """
     box_detection = None
 
-    # Continue to play the video until keypoints for the box are found
-    # mimic the behavior of guiding user to aligh the box right
+    # Attempt to detect box keypoints
     ok, box_detection = box_detector.detect(frame)
     if ok:
-        above_threshold = box_detection['Front divider top'][1]
-        below_threshold =  min(box_detection['Back top left'][1], box_detection['Back top right'][1])
-        return above_threshold, below_threshold
+        above_threshold_y = box_detection['Front divider top'][1]
+        below_threshold_y = min(box_detection['Back top left'][1], box_detection['Back top right'][1])
+        return above_threshold_y, below_threshold_y
     elif box_detection is not None and not ok:
-        # Guess the missing keypoints
+        # If detection was partial, try to guess missing keypoints
         box_detection = box_detector.guess_missing_keypoints(
             box_detection,
             width,
@@ -27,11 +30,17 @@ def get_box(frame, box_detector: BoxDetector, width, height):
 
         if box_detection is not None:
             # From guessed points
-            above_threshold = box_detection['Front divider top'][1]
-            below_threshold =  min(box_detection['Back top left'][1], box_detection['Back top right'][1])
-            return above_threshold, below_threshold
+            above_threshold_y = box_detection['Front divider top'][1]
+            below_threshold_y = min(box_detection['Back top left'][1], box_detection['Back top right'][1])
+            return above_threshold_y, below_threshold_y
         else:
-            return 0,0
+            # If guessing also fails
+            return 0, 0 # Return default values
+    else:
+        # If no box_detection at all
+        return 0, 0 # Return default values
+
+
 def draw_thresholds(frame, above_threshold_y, below_threshold_y):
     """
     Draws a red horizontal line with "ABOVE THRESHOLD" text and a blue horizontal line
@@ -49,7 +58,7 @@ def draw_thresholds(frame, above_threshold_y, below_threshold_y):
     # Get the dimensions of the frame
     height, width, _ = frame.shape
 
-    # Define colors in 
+    # Define colors in BGR format
     RED = (0, 0, 255)   # (Blue, Green, Red)
     BLUE = (255, 0, 0)  # (Blue, Green, Red)
     
@@ -70,24 +79,14 @@ def draw_thresholds(frame, above_threshold_y, below_threshold_y):
     (above_text_width, above_text_height), above_baseline = cv2.getTextSize(above_text, font, font_scale, font_thickness)
     
     # Determine Y-position for ABOVE THRESHOLD text (baseline)
-    # Option 1: Try to place text *above* the line
-    # Baseline will be at above_threshold_y - text_vertical_buffer
-    # Top of text will be at (above_threshold_y - text_vertical_buffer - above_text_height)
     above_text_y_baseline_option1 = above_threshold_y - text_vertical_buffer
-
-    # Option 2: Try to place text *below* the line
-    # Baseline will be at (above_threshold_y + text_vertical_buffer + above_text_height)
     above_text_y_baseline_option2 = above_threshold_y + text_vertical_buffer + above_text_height
 
-    # Choose placement: Prioritize placing above unless it goes off screen
-    if (above_text_y_baseline_option1 - above_text_height) < 0: # If text top is above frame top
-        # Option 1 is invalid, use Option 2
+    if (above_text_y_baseline_option1 - above_text_height) < 0:
         above_text_y_pos = above_text_y_baseline_option2
-        # If Option 2 also goes off screen (bottom of frame), fallback to minimal offset below line
         if above_text_y_pos > height:
-            above_text_y_pos = above_threshold_y + 5 + above_text_height # 5 pixels below line
+            above_text_y_pos = above_threshold_y + 5 + above_text_height
     else:
-        # Option 1 is valid, use it
         above_text_y_pos = above_text_y_baseline_option1
 
     cv2.putText(frame, above_text, (text_x_start, above_text_y_pos), font, font_scale, RED, font_thickness, cv2.LINE_AA)
@@ -99,29 +98,20 @@ def draw_thresholds(frame, above_threshold_y, below_threshold_y):
     (below_text_width, below_text_height), below_baseline = cv2.getTextSize(below_text, font, font_scale, font_thickness)
 
     # Determine Y-position for BELOW THRESHOLD text (baseline)
-    # Option 1: Try to place text *below* the line
-    # Baseline will be at (below_threshold_y + text_vertical_buffer + below_text_height)
     below_text_y_baseline_option1 = below_threshold_y + text_vertical_buffer + below_text_height
-
-    # Option 2: Try to place text *above* the line
-    # Baseline will be at (below_threshold_y - text_vertical_buffer)
-    # Top of text will be at (below_threshold_y - text_vertical_buffer - below_text_height)
     below_text_y_baseline_option2 = below_threshold_y - text_vertical_buffer
 
-    # Choose placement: Prioritize placing below unless it goes off screen
-    if below_text_y_baseline_option1 > height: # If text baseline is below frame bottom
-        # Option 1 is invalid, use Option 2
+    if below_text_y_baseline_option1 > height:
         below_text_y_pos = below_text_y_baseline_option2
-        # If Option 2 also goes off screen (top of frame), fallback to minimal offset above line
         if (below_text_y_pos - below_text_height) < 0:
-            below_text_y_pos = below_threshold_y - 5 # 5 pixels above line
+            below_text_y_pos = below_threshold_y - 5
     else:
-        # Option 1 is valid, use it
         below_text_y_pos = below_text_y_baseline_option1
 
     cv2.putText(frame, below_text, (text_x_start, below_text_y_pos), font, font_scale, BLUE, font_thickness, cv2.LINE_AA)
 
     return frame
+
 
 def main():
     if len(sys.argv) != 2:
@@ -136,9 +126,16 @@ def main():
         sys.exit(1)
     
     video_name = video_path.split('/')[-1].split('.')[0] # Extract filename only without path or extensions
-    print(video_name)
+    print(f"Processing video: {video_name}")
 
-    box_detector = BoxDetector("keypoint_detector.pt")
+    # Initialize BoxDetector
+    # Make sure 'keypoint_detector.pt' is in the same directory or provide full path
+    try:
+        box_detector = BoxDetector("keypoint_detector.pt")
+    except FileNotFoundError:
+        print("Error: 'keypoint_detector.pt' not found. Please ensure the model file is in the correct directory.")
+        sys.exit(1)
+
 
     # Open video file
     cap = cv2.VideoCapture(video_path)
@@ -150,7 +147,6 @@ def main():
     # Get video properties
     fps = cap.get(cv2.CAP_PROP_FPS)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
     frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     
@@ -159,49 +155,96 @@ def main():
     print(f"FPS: {fps}, Total frames: {total_frames}")
     print("\nControls:")
     print("- Press any key to advance frame")
-    print("- Press r to rewind frame")
+    print("- Press 'r' to rewind frame (and undo last recorded attempt if rewound past it)")
     print("- Press '1' to mark attempt start")
-    print("- Press '2' to mark attempt end (and save to CSV)")
-    print("- Press 'q' to quit")
+    print("- Press '2' to mark cross frame (e.g., when fingers cross the plane)")
+    print("- Press '3' to mark attempt end (and save current attempt to CSV)")
+    print("- Press 'q' to quit (progress will be saved)")
     print("\nStarting playback...")
     
     # Initialize variables
     attempt_number = 1
     attempt_start_frame = None
     attempt_start_time = None
+    cross_frame = None
+    cross_time = None
     current_frame = 0
+    
     csv_file = f"{video_name}_attempt_ground_truths.csv"
     recorded_message = None
     recorded_message_timer = 0
-    recorded_attempts = []  # Store completed attempts to track for deletion
+    recorded_attempts = []  # Store completed attempts to track for deletion and rewriting
+    
+    # Initialize default threshold lines (will be updated by get_box)
+    above_line_y = 0
+    below_line_y = frame_height # Set to bottom of frame initially
     
     # Create CSV file with headers if it doesn't exist
     if not os.path.exists(csv_file):
         with open(csv_file, 'w', newline='') as f:
             writer = csv.writer(f)
             writer.writerow(['attempt_number', 'attempt_start_time', 'attempt_end_time', 
-                           'attempt_start_frame', 'attempt_end_frame'])
-    
+                           'attempt_start_frame', 'attempt_end_frame',
+                           'cross_time', 'cross_frame'])
+    else:
+        # If CSV exists, load existing data to continue labeling
+        with open(csv_file, 'r', newline='') as f:
+            reader = csv.DictReader(f)
+            # Check if headers match, if not, print warning (or handle migration)
+            expected_headers = ['attempt_number', 'attempt_start_time', 'attempt_end_time', 
+                                'attempt_start_frame', 'attempt_end_frame',
+                                'cross_time', 'cross_frame']
+            if reader.fieldnames != expected_headers:
+                print(f"Warning: Existing CSV headers do not match expected headers. "
+                      f"Expected: {expected_headers}, Found: {reader.fieldnames}")
+                print("Appended data might not align correctly if you proceed.")
+                # You might want to add a sys.exit(1) here or force a new file name.
+
+            for row in reader:
+                # Convert relevant fields back to their original types for in-memory tracking
+                try:
+                    recorded_attempts.append({
+                        'number': int(row['attempt_number']),
+                        'start_time': float(row['attempt_start_time']),
+                        'end_time': float(row['attempt_end_time']),
+                        'start_frame': int(row['attempt_start_frame']),
+                        'end_frame': int(row['attempt_end_frame']),
+                        'cross_time': float(row['cross_time']) if row['cross_time'] else None,
+                        'cross_frame': int(row['cross_frame']) if row['cross_frame'] else None
+                    })
+                except (ValueError, KeyError) as e:
+                    print(f"Error reading existing CSV row: {row}. Skipping. Error: {e}")
+        
+        if recorded_attempts:
+            attempt_number = max(a['number'] for a in recorded_attempts) + 1
+            print(f"Loaded {len(recorded_attempts)} existing attempts. Continuing from attempt {attempt_number}.")
+            # Set current_frame to end of last recorded attempt to continue from there
+            current_frame = recorded_attempts[-1]['end_frame']
+            cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame)
+
+
     while True:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame) # Ensure correct frame is read after 'r' or initialization
         ret, frame = cap.read()
         
         if not ret:
             print("End of video reached.")
             break
         
-        # Update box keypoints 
+        # Update box keypoints at specified interval (e.g., every 300 frames)
         if current_frame % 300 == 0:
-            above_line_y, below_line_y = get_box(frame, box_detector, frame_width, frame_height)
-            above_line_y = int(above_line_y)
-            below_line_y = int(below_line_y)
+            above_line_y_float, below_line_y_float = get_box(frame, box_detector, frame_width, frame_height)
+            above_line_y = int(above_line_y_float)
+            below_line_y = int(below_line_y_float)
             
+        # Draw the threshold lines on the frame
         frame = draw_thresholds(frame, above_line_y, below_line_y)
       
         # Calculate current time in seconds
         current_time = current_frame / fps
         
-        # Default control messages
-        control_text = "Any key to advance / r to rewind / 1 to mark start / 2 to mark end / q to quit" 
+        # Display control messages
+        control_text = "Any key: advance | r: rewind | 1: start | 2: cross | 3: end | q: quit" 
         cv2.putText(frame, control_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         
         # Display frame info on the frame
@@ -209,13 +252,20 @@ def main():
         cv2.putText(frame, info_text, (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
         
         # Show current attempt status
+        status_lines = []
         if attempt_start_frame is not None:
-            status_text = f"Attempt {attempt_number} - Start marked at frame {attempt_start_frame}"
-            cv2.putText(frame, status_text, (10, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            status_lines.append(f"Attempt {attempt_number} START: {attempt_start_frame} ({attempt_start_time:.2f}s)")
+        if cross_frame is not None:
+            status_lines.append(f"CROSS: {cross_frame} ({cross_time:.2f}s)")
         
+        y_offset = 110
+        for line in status_lines:
+            cv2.putText(frame, line, (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            y_offset += 30 # Move down for next line
+
         # Show recorded message if active
         if recorded_message and recorded_message_timer > 0:
-            cv2.putText(frame, recorded_message, (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 50 , 255), 2)
+            cv2.putText(frame, recorded_message, (10, y_offset + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 50 , 255), 2)
             recorded_message_timer -= 1
         
         # Display the frame
@@ -231,17 +281,30 @@ def main():
             # Mark attempt start
             attempt_start_frame = current_frame
             attempt_start_time = current_time
+            cross_frame = None # Reset cross_frame for new attempt
+            cross_time = None  # Reset cross_time for new attempt
             print(f"Attempt {attempt_number} start marked - Frame: {current_frame}, Time: {current_time:.2f}s")
         elif key == ord('2'):
+            # Mark cross frame
+            if attempt_start_frame is not None:
+                cross_frame = current_frame
+                cross_time = current_time
+                print(f"Attempt {attempt_number} cross frame marked - Frame: {current_frame}, Time: {current_time:.2f}s")
+            else:
+                print("Warning: Mark attempt start ('1') first before marking cross frame.")
+        elif key == ord('3'):
             # Mark attempt end and save to CSV
             if attempt_start_frame is not None:
                 attempt_end_frame = current_frame
                 attempt_end_time = current_time
+                
                 # Write to CSV
                 with open(csv_file, 'a', newline='') as f:
                     writer = csv.writer(f)
                     writer.writerow([attempt_number, attempt_start_time, attempt_end_time,
-                                   attempt_start_frame, attempt_end_frame])
+                                   attempt_start_frame, attempt_end_frame,
+                                   cross_time if cross_time is not None else '', # Write empty string if None
+                                   cross_frame if cross_frame is not None else '']) # Write empty string if None
                 
                 # Store attempt info for tracking deletions
                 recorded_attempts.append({
@@ -249,11 +312,15 @@ def main():
                     'start_time': attempt_start_time,
                     'end_time': attempt_end_time,
                     'start_frame': attempt_start_frame,
-                    'end_frame': attempt_end_frame
+                    'end_frame': attempt_end_frame,
+                    'cross_time': cross_time,
+                    'cross_frame': cross_frame
                 })
                 
                 print(f"✓ Attempt {attempt_number} has been recorded!")
                 print(f"  Start - Frame: {attempt_start_frame}, Time: {attempt_start_time:.2f}s")
+                if cross_frame is not None:
+                    print(f"  Cross - Frame: {cross_frame}, Time: {cross_time:.2f}s")
                 print(f"  End   - Frame: {attempt_end_frame}, Time: {attempt_end_time:.2f}s")
                 
                 # Set message to display on video
@@ -264,8 +331,10 @@ def main():
                 attempt_number += 1
                 attempt_start_frame = None
                 attempt_start_time = None
+                cross_frame = None
+                cross_time = None
             else:
-                print("Warning: Press '1' first to mark attempt start before pressing '2'")
+                print("Warning: Press '1' first to mark attempt start before pressing '3'")
         elif key == ord('r'):
             # Rewind frame
             if current_frame > 0:
@@ -274,42 +343,51 @@ def main():
                 # Check if we're rewinding past any recorded attempts
                 attempts_to_remove = []
                 for attempt in recorded_attempts:
-                    if new_frame < attempt['end_frame']:
+                    # An attempt is "erased" if its end frame is now beyond the new current frame
+                    if attempt['end_frame'] >= new_frame: # Use >= because new_frame is the frame we're moving to
                         attempts_to_remove.append(attempt)
                 
                 # Remove attempts and update CSV if necessary
                 if attempts_to_remove:
                     for attempt in attempts_to_remove:
                         recorded_attempts.remove(attempt)
-                        # Set message to display on video
                         recorded_message = f"Attempt {attempt['number']} erased!"
                         recorded_message_timer = 60
-                        print(f"Attempt {attempt['number']} erased - rewound past end frame {attempt['end_frame']}")
+                        print(f"Attempt {attempt['number']} erased - rewound past its end frame {attempt['end_frame']}")
                     
                     # Rewrite entire CSV file without the removed attempts
                     with open(csv_file, 'w', newline='') as f:
                         writer = csv.writer(f)
                         writer.writerow(['attempt_number', 'attempt_start_time', 'attempt_end_time', 
-                                       'attempt_start_frame', 'attempt_end_frame'])
+                                       'attempt_start_frame', 'attempt_end_frame',
+                                       'cross_time', 'cross_frame'])
                         for attempt in recorded_attempts:
                             writer.writerow([attempt['number'], attempt['start_time'], attempt['end_time'],
-                                           attempt['start_frame'], attempt['end_frame']])
+                                           attempt['start_frame'], attempt['end_frame'],
+                                           attempt['cross_time'] if attempt['cross_time'] is not None else '',
+                                           attempt['cross_frame'] if attempt['cross_frame'] is not None else ''])
                     
                     # Update attempt_number to be one more than the highest remaining attempt
                     if recorded_attempts:
-                        attempt_number = max(attempt['number'] for attempt in recorded_attempts) + 1
+                        attempt_number = max(a['number'] for a in recorded_attempts) + 1
                     else:
                         attempt_number = 1
-                
-                current_frame = new_frame - 1  # Subtract 1 because we'll add 1 at the end of loop
+                    
+                    # Reset current attempt's marking if it was part of the removed ones
+                    attempt_start_frame = None
+                    attempt_start_time = None
+                    cross_frame = None
+                    cross_time = None
+
+                current_frame = new_frame # Set frame to the new position
                 cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame)
                 print(f"Rewound to frame {current_frame}")
             else:
                 print("Already at the beginning of the video")
-                current_frame -= 1  # Compensate for the +1 at end of loop
-        
-        # Advance to next frame (will be modified by key handlers above)
-        current_frame += 1
+                # Do not decrement current_frame if already at 0
+        else:
+            # For any other key, advance one frame.
+            current_frame += 1
     
     # Clean up
     cap.release()

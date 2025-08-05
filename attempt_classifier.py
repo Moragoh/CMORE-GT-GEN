@@ -29,15 +29,15 @@ def main():
     try:
         df = pd.read_csv(csv_file)
         # Convert frame columns to integers
-        df['Start Frame index'] = df['Start Frame index'].astype(int)
-        df['End Frame index'] = df['End Frame index'].astype(int)
+        df['attempt_start_frame'] = df['attempt_start_frame'].astype(int)
+        df['attempt_end_frame'] = df['attempt_end_frame'].astype(int)
         print(f"Loaded {len(df)} attempts from {csv_file}")
     except Exception as e:
         print(f"Error reading CSV file: {e}")
         sys.exit(1)
     
     # Validate required columns
-    required_columns = ['Start Frame index', 'End Frame index']
+    required_columns = ['attempt_start_frame', 'attempt_end_frame']
     for col in required_columns:
         if col not in df.columns:
             print(f"Error: Required column '{col}' not found in CSV")
@@ -93,10 +93,16 @@ def main():
         row = df.iloc[index]
         
         attempt_num = index + 1  # Use row index + 1 as attempt number
-        start_frame = int(row['Start Frame index'])
-        end_frame = int(row['End Frame index'])
+        start_frame = int(row['attempt_start_frame'])
+        end_frame = int(row['attempt_end_frame'])
         start_time = start_frame / fps
         end_time = end_frame / fps
+        
+        # --- MODIFICATION START ---
+        # Define the navigation boundaries for the current attempt (+/- 30 frames)
+        rewind_limit = max(0, start_frame - 30)
+        forward_limit = min(total_frames - 1, end_frame + 30)
+        # --- MODIFICATION END ---
         
         print(f"\n--- Classifying Attempt {attempt_num} ---")
         print(f"Frames {start_frame} to {end_frame} ({start_time:.2f}s to {end_time:.2f}s)")
@@ -112,8 +118,11 @@ def main():
         custom_text = ""
         
         while not classified:
-            # Ensure current_frame stays within video bounds (but allow going beyond attempt bounds)
-            current_frame = max(0, min(current_frame, total_frames - 1))
+            # --- MODIFICATION START ---
+            # Ensure current_frame stays within the newly defined attempt boundaries
+            # Note: The main check now happens during key presses. This is a safeguard.
+            current_frame = max(rewind_limit, min(current_frame, forward_limit))
+            # --- MODIFICATION END ---
             
             # Set video position to current frame
             cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame)
@@ -129,29 +138,32 @@ def main():
             
             # Display info on frame with white background
             info_text = f"Attempt {attempt_num} | Frame: {current_frame} | Time: {current_time:.2f}s"
-            # Get text size to create background rectangle
             (text_width, text_height), baseline = cv2.getTextSize(info_text, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
-            # Draw green background rectangle
             cv2.rectangle(frame, (10, 30 - text_height - 5), (10 + text_width + 5, 30 + baseline + 5), (0, 255, 0), -1)
-            # Draw text on top of green background
             cv2.putText(frame, info_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
             
             # Show frame range info and controls
-            range_text = f"Range: {start_frame}-{end_frame} | j/k: -/+1 | h/l: -/+10 | u/i: prev/next attempt"
-            # Get text size to create background rectangle
+            range_text = f"Range: {start_frame}-{end_frame} | j/k: -/+1 | h/l: -/+10 | u/i: prev/next"
             (text_width, text_height), baseline = cv2.getTextSize(range_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
-            # Draw white background rectangle
             cv2.rectangle(frame, (10, 60 - text_height - 5), (10 + text_width + 5, 60 + baseline + 5), (255, 255, 255), -1)
-            # Draw text on top of white background
             cv2.putText(frame, range_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
             
-            classify_text = f"Press 0 (no drop) | 1 (drop) | 2 (flag options) | q (quit)"
-            # Get text size to create background rectangle
+            # --- MODIFICATION START ---
+            # Show navigation limit text
+            limit_y_pos = 90
+            limit_text = f"Nav Locked to: {rewind_limit}-{forward_limit} (+/- 30 frames)"
+            (text_width, text_height), baseline = cv2.getTextSize(limit_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+            cv2.rectangle(frame, (10, limit_y_pos - text_height - 5), (10 + text_width + 5, limit_y_pos + baseline + 5), (0, 255, 255), -1)
+            cv2.putText(frame, limit_text, (10, limit_y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
+            
+            # Adjust position of the next text block
+            classify_y_pos = limit_y_pos + 30
+            # --- MODIFICATION END ---
+            
+            classify_text = f"Press 0 (no drop) | 1 (drop) | 2 (flag) | q (quit)"
             (text_width, text_height), baseline = cv2.getTextSize(classify_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
-            # Draw white background rectangle
-            cv2.rectangle(frame, (10, 90 - text_height - 5), (10 + text_width + 5, 90 + baseline + 5), (255, 255, 255), -1)
-            # Draw text on top of white background
-            cv2.putText(frame, classify_text, (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
+            cv2.rectangle(frame, (10, classify_y_pos - text_height - 5), (10 + text_width + 5, classify_y_pos + baseline + 5), (255, 255, 255), -1)
+            cv2.putText(frame, classify_text, (10, classify_y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
             
             # Show flag menu if active
             if flag_menu_active and not custom_input_mode:
@@ -164,78 +176,69 @@ def main():
                     "2: Back to main menu"
                 ]
                 
-                y_start = 120
+                y_start = classify_y_pos + 30
                 for i, option in enumerate(flag_options):
                     y_pos = y_start + (i * 25)
-                    # Get text size for background
                     (text_width, text_height), baseline = cv2.getTextSize(option, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
-                    # Draw yellow background for flag menu
                     cv2.rectangle(frame, (10, y_pos - text_height - 3), (10 + text_width + 5, y_pos + baseline + 3), (0, 255, 255), -1)
-                    # Draw text
                     cv2.putText(frame, option, (10, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
             
             # Show custom input interface if in custom input mode
             if custom_input_mode:
-                # Title prompt
                 prompt_text = "Type custom reason for flagging:"
                 y_pos = 130
                 (text_width, text_height), baseline = cv2.getTextSize(prompt_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
                 cv2.rectangle(frame, (10, y_pos - text_height - 5), (10 + text_width + 5, y_pos + baseline + 5), (0, 0, 255), -1)
                 cv2.putText(frame, prompt_text, (10, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
                 
-                # Text input box showing what user has typed
-                input_display = f"Input: {custom_text}|"  # | acts as cursor
+                input_display = f"Input: {custom_text}|"
                 y_pos2 = y_pos + 35
                 (text_width2, text_height2), baseline2 = cv2.getTextSize(input_display, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
                 cv2.rectangle(frame, (10, y_pos2 - text_height2 - 3), (10 + text_width2 + 5, y_pos2 + baseline2 + 3), (255, 255, 255), -1)
                 cv2.putText(frame, input_display, (10, y_pos2), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
                 
-                # Instructions
                 instruction_text = "Press Enter to submit | Press Esc to cancel"
                 y_pos3 = y_pos2 + 30
                 (text_width3, text_height3), baseline3 = cv2.getTextSize(instruction_text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
                 cv2.rectangle(frame, (10, y_pos3 - text_height3 - 3), (10 + text_width3 + 5, y_pos3 + baseline3 + 3), (0, 0, 255), -1)
                 cv2.putText(frame, instruction_text, (10, y_pos3), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
             
-            # Display the frame
             cv2.imshow('Attempt Classifier', frame)
             
-            # Wait for key press
-            key = cv2.waitKey(0) & 0xFF  # Wait indefinitely for key press
+            key = cv2.waitKey(0) & 0xFF
             
             if key == ord('q') and not flag_menu_active:
                 print("Quitting...")
                 cap.release()
                 cv2.destroyAllWindows()
                 sys.exit(0)
+            # --- MODIFICATION START ---
+            # Update navigation to respect the new boundaries
             elif key == ord('j') and not custom_input_mode:  # Go back 1 frame
-                current_frame -= 1
-                current_frame = max(0, current_frame)
+                current_frame = max(rewind_limit, current_frame - 1)
             elif key == ord('k') and not custom_input_mode:  # Advance 1 frame
-                current_frame += 1
-                current_frame = min(total_frames - 1, current_frame)
+                current_frame = min(forward_limit, current_frame + 1)
             elif key == ord('h') and not custom_input_mode:  # Go back 10 frames
-                current_frame -= 10
-                current_frame = max(0, current_frame)
+                current_frame = max(rewind_limit, current_frame - 10)
             elif key == ord('l') and not custom_input_mode:  # Advance 10 frames
-                current_frame += 10
-                current_frame = min(total_frames - 1, current_frame)
+                current_frame = min(forward_limit, current_frame + 10)
+            # --- MODIFICATION END ---
             elif key == ord('u') and not custom_input_mode and not flag_menu_active:  # Go to previous attempt
                 if current_attempt_index > 0:
                     current_attempt_index -= 1
                     prev_row = df.iloc[current_attempt_index]
-                    current_frame = int(prev_row['Start Frame index'])
+                    current_frame = int(prev_row['attempt_start_frame'])
                     print(f"Jumped to attempt {current_attempt_index + 1}")
-                    break  # Exit the inner loop to restart with new attempt
+                    break
                 else:
                     print("Already at first attempt")
             elif key == ord('i') and not custom_input_mode and not flag_menu_active:  # Go to next attempt
                 if current_attempt_index < len(df) - 1:
                     current_attempt_index += 1
                     next_row = df.iloc[current_attempt_index]
-                    current_frame = int(next_row['Start Frame index'])
+                    current_frame = int(next_row['attempt_start_frame'])
                     print(f"Jumped to attempt {current_attempt_index + 1}")
-                    break  # Exit the inner loop to restart with new attempt
+                    break
                 else:
                     print("Already at last attempt")
             elif key == ord('0') and not flag_menu_active:
@@ -248,19 +251,16 @@ def main():
                 print(f"Attempt {attempt_num} classified as ground_truth_block_drop = 1 (block fell)")
             elif key == ord('2'):
                 if flag_menu_active:
-                    # Go back to main menu
                     flag_menu_active = False
                     custom_input_mode = False
                     custom_text = ""
                     print("Returned to main menu")
                 else:
-                    # Open flag menu
                     flag_menu_active = True
                     custom_input_mode = False
                     custom_text = ""
                     print("Flag menu opened")
             elif flag_menu_active and not custom_input_mode:
-                # Handle flag menu options
                 if key == ord('w'):
                     falling_block_value = 2
                     is_flagged = 1
@@ -280,14 +280,11 @@ def main():
                     classified = True
                     print(f"Attempt {attempt_num} flagged: {reason_for_flag}")
                 elif key == ord('t'):
-                    # Enter custom input mode
                     custom_input_mode = True
                     custom_text = ""
                     print("Custom input mode activated")
             elif custom_input_mode:
-                # Handle custom input mode
                 if key == 27:  # Escape key
-                    # Go back to flag menu
                     custom_input_mode = False
                     custom_text = ""
                     print("Returned to flag menu")
@@ -300,31 +297,26 @@ def main():
                         print(f"Attempt {attempt_num} flagged with custom reason: {reason_for_flag}")
                     else:
                         print("No text entered, staying in custom input mode")
-                elif key == 8 or key == 127:  # Backspace (different systems use different codes)
+                elif key == 8 or key == 127:
                     if custom_text:
                         custom_text = custom_text[:-1]
-                elif key >= 32 and key <= 126:  # Printable ASCII characters
+                elif key >= 32 and key <= 126:
                     custom_text += chr(key)
         
-        # Only save and advance if we actually classified (not if we jumped to another attempt)
         if classified:
-            # Prepare output row - update existing values or add new ones
             output_row = row.copy()
             output_row['ground_truth_block_drop'] = falling_block_value
             output_row['is_flagged'] = is_flagged
             output_row['reason_for_flag'] = reason_for_flag
             
-            # Write the classified attempt to output CSV
             with open(output_csv, 'a', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow(output_row.values)
             
             print(f"✓ Attempt {attempt_num} saved with ground_truth_block_drop = {falling_block_value}, is_flagged = {is_flagged}")
             
-            # Move to next attempt
             current_attempt_index += 1
     
-    # Clean up
     cap.release()
     cv2.destroyAllWindows()
     
