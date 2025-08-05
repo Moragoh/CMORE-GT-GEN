@@ -154,8 +154,8 @@ def main():
     print(f"Video loaded: {video_path}")
     print(f"FPS: {fps}, Total frames: {total_frames}")
     print("\nControls:")
-    print("- Press any key to advance frame")
-    print("- Press 'r' to rewind frame (and undo last recorded attempt if rewound past it)")
+    print("- Press 'k' to advance frame")
+    print("- Press 'j' to rewind frame (and undo last recorded attempt if rewound past it)")
     print("- Press '1' to mark attempt start")
     print("- Press '2' to mark cross frame (e.g., when fingers cross the plane)")
     print("- Press '3' to mark attempt end (and save current attempt to CSV)")
@@ -224,7 +224,7 @@ def main():
 
 
     while True:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame) # Ensure correct frame is read after 'r' or initialization
+        cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame) # Ensure correct frame is read after 'j' or initialization
         ret, frame = cap.read()
         
         if not ret:
@@ -244,7 +244,7 @@ def main():
         current_time = current_frame / fps
         
         # Display control messages
-        control_text = "Any key: advance | r: rewind | 1: start | 2: cross | 3: end | q: quit" 
+        control_text = "k: advance | j: rewind | 1: start | 2: cross | 3: end | q: quit" 
         cv2.putText(frame, control_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         
         # Display frame info on the frame
@@ -277,6 +277,9 @@ def main():
         if key == ord('q'):
             print("Quitting...")
             break
+        elif key == ord('k'):
+            # Advance one frame.
+            current_frame += 1
         elif key == ord('1'):
             # Mark attempt start
             attempt_start_frame = current_frame
@@ -335,7 +338,7 @@ def main():
                 cross_time = None
             else:
                 print("Warning: Press '1' first to mark attempt start before pressing '3'")
-        elif key == ord('r'):
+        elif key == ord('j'):
             # Rewind frame
             if current_frame > 0:
                 new_frame = current_frame - 1
@@ -386,8 +389,8 @@ def main():
                 print("Already at the beginning of the video")
                 # Do not decrement current_frame if already at 0
         else:
-            # For any other key, advance one frame.
-            current_frame += 1
+            # For any other key, do nothing.
+            pass
     
     # Clean up
     cap.release()
