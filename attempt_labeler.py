@@ -176,9 +176,9 @@ def main():
     print(f"FPS: {fps}, Total frames: {total_frames}")
     print("\nControls:")
     print("- Press 'k' to advance frame (+1)")
-    print("- Press 'l' to advance frames (+10)") # New control
+    print("- Press 'l' to advance frames (+10)")
     print("- Press 'j' to rewind frame (-1, with undo logic)")
-    print("- Press 'h' to rewind frames (-10)") # New control
+    print("- Press 'h' to rewind frames (-10, with undo logic)") # Updated control description
     print("- Press '1' to mark attempt start")
     print("- Press '2' to mark cross frame (e.g., when fingers cross the plane)")
     print("- Press '3' to mark attempt end (and save current attempt to CSV)")
@@ -269,7 +269,6 @@ def main():
         current_time = current_frame / fps
         
         # Display control messages
-        # Updated control text with 'h' and 'l'
         control_text = "k: +1 | l: +10 | j: -1 | h: -10 | 1: start | 2: cross | 3: end | q: quit" 
         cv2.putText(frame, control_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         
@@ -377,58 +376,38 @@ def main():
             if current_frame > 0:
                 new_frame = current_frame - 1
                 
-                # Check if we're rewinding past any recorded attempts
-                attempts_to_remove = []
-                for attempt in recorded_attempts:
-                    # An attempt is "erased" if its end frame is now beyond the new current frame
-                    if attempt['end_frame'] >= new_frame: # Use >= because new_frame is the frame we're moving to
-                        attempts_to_remove.append(attempt)
+                # The shared logic for checking and removing attempts due to rewind
+                current_frame, recorded_attempts, attempt_number, \
+                attempt_start_frame, attempt_start_time, cross_frame, cross_time, \
+                recorded_message, recorded_message_timer = \
+                    handle_rewind_and_undo(new_frame, current_frame, recorded_attempts, 
+                                           attempt_number, attempt_start_frame, 
+                                           attempt_start_time, cross_frame, cross_time, 
+                                           recorded_message, recorded_message_timer, csv_file)
                 
-                # Remove attempts and update CSV if necessary
-                if attempts_to_remove:
-                    for attempt in attempts_to_remove:
-                        recorded_attempts.remove(attempt)
-                        recorded_message = f"Attempt {attempt['number']} erased!"
-                        recorded_message_timer = 60
-                        print(f"Attempt {attempt['number']} erased - rewound past its end frame {attempt['end_frame']}")
-                    
-                    # Rewrite entire CSV file without the removed attempts
-                    with open(csv_file, 'w', newline='') as f:
-                        writer = csv.writer(f)
-                        writer.writerow(['attempt_number', 'attempt_start_time', 'attempt_end_time', 
-                                       'attempt_start_frame', 'attempt_end_frame',
-                                       'cross_time', 'cross_frame'])
-                        for attempt in recorded_attempts:
-                            writer.writerow([attempt['number'], attempt['start_time'], attempt['end_time'],
-                                           attempt['start_frame'], attempt['end_frame'],
-                                           attempt['cross_time'] if attempt['cross_time'] is not None else '',
-                                           attempt['cross_frame'] if attempt['cross_frame'] is not None else ''])
-                    
-                    # Update attempt_number to be one more than the highest remaining attempt
-                    if recorded_attempts:
-                        attempt_number = max(a['number'] for a in recorded_attempts) + 1
-                    else:
-                        attempt_number = 1
-                    
-                    # Reset current attempt's marking if it was part of the removed ones
-                    attempt_start_frame = None
-                    attempt_start_time = None
-                    cross_frame = None
-                    cross_time = None
-
-                current_frame = new_frame # Set frame to the new position
                 cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame)
                 print(f"Rewound to frame {current_frame}")
             else:
                 print("Already at the beginning of the video")
                 # Do not decrement current_frame if already at 0
         elif key == ord('h'):
-            # Rewind 10 frames
-            new_frame = current_frame - 10
-            # Ensure new_frame does not go below 0
-            current_frame = max(0, new_frame)
-            cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame)
-            print(f"Rewound to frame {current_frame}")
+            # Rewind 10 frames (with undo logic for recorded attempts)
+            if current_frame > 0:
+                new_frame = current_frame - 10
+                
+                # The shared logic for checking and removing attempts due to rewind
+                current_frame, recorded_attempts, attempt_number, \
+                attempt_start_frame, attempt_start_time, cross_frame, cross_time, \
+                recorded_message, recorded_message_timer = \
+                    handle_rewind_and_undo(new_frame, current_frame, recorded_attempts, 
+                                           attempt_number, attempt_start_frame, 
+                                           attempt_start_time, cross_frame, cross_time, 
+                                           recorded_message, recorded_message_timer, csv_file)
+                
+                cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame)
+                print(f"Rewound to frame {current_frame}")
+            else:
+                print("Already at the beginning of the video")
         else:
             # For any other key, do nothing.
             pass
@@ -437,6 +416,65 @@ def main():
     cap.release()
     cv2.destroyAllWindows()
     print(f"\nData saved to: {csv_file}")
+
+# Helper function to encapsulate rewind and undo logic
+def handle_rewind_and_undo(new_frame, current_frame, recorded_attempts, 
+                           attempt_number, attempt_start_frame, 
+                           attempt_start_time, cross_frame, cross_time, 
+                           recorded_message, recorded_message_timer, csv_file):
+    
+    # Ensure new_frame does not go below 0
+    new_frame = max(0, new_frame)
+
+    attempts_to_remove = []
+    for attempt in recorded_attempts:
+        # An attempt is "erased" if its end frame is now beyond the new current frame
+        if attempt['end_frame'] >= new_frame: 
+            attempts_to_remove.append(attempt)
+    
+    # Remove attempts and update CSV if necessary
+    if attempts_to_remove:
+        # Sort in reverse order to avoid index issues if removing from original list
+        attempts_to_remove.sort(key=lambda x: x['number'], reverse=True)
+        for attempt in attempts_to_remove:
+            recorded_attempts.remove(attempt)
+            recorded_message = f"Attempt {attempt['number']} erased!"
+            recorded_message_timer = 60
+            print(f"Attempt {attempt['number']} erased - rewound past its end frame {attempt['end_frame']}")
+        
+        # Rewrite entire CSV file without the removed attempts
+        with open(csv_file, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['attempt_number', 'attempt_start_time', 'attempt_end_time', 
+                           'attempt_start_frame', 'attempt_end_frame',
+                           'cross_time', 'cross_frame'])
+            for attempt in recorded_attempts:
+                writer.writerow([attempt['number'], attempt['start_time'], attempt['end_time'],
+                               attempt['start_frame'], attempt['end_frame'],
+                               attempt['cross_time'] if attempt['cross_time'] is not None else '',
+                               attempt['cross_frame'] if attempt['cross_frame'] is not None else ''])
+        
+        # Update attempt_number to be one more than the highest remaining attempt
+        if recorded_attempts:
+            attempt_number = max(a['number'] for a in recorded_attempts) + 1
+        else:
+            attempt_number = 1
+        
+        # Reset current attempt's marking if it was part of the removed ones
+        # This checks if the current START frame or CROSS frame would now be *after* the new_frame
+        # If the start or cross point is still valid (i.e., less than new_frame), we keep it.
+        # This assumes current_frame is updated after this function.
+        if attempt_start_frame is not None and attempt_start_frame >= new_frame:
+            attempt_start_frame = None
+            attempt_start_time = None
+        if cross_frame is not None and cross_frame >= new_frame:
+            cross_frame = None
+            cross_time = None
+        
+    return new_frame, recorded_attempts, attempt_number, \
+           attempt_start_frame, attempt_start_time, cross_frame, cross_time, \
+           recorded_message, recorded_message_timer
+
 
 if __name__ == "__main__":
     main()
