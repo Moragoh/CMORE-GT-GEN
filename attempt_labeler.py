@@ -7,6 +7,17 @@ import os
 from pathlib import Path
 from keypoint_detector import BoxDetector # Assuming this module is available
 
+"""
+TODO:
+Make crossing line
+
+
+DEFINITIONS FOR WHEN TO START MARKING
+Start: When the whole hand leaves the red line.
+Crossing: When any one knuckle or fingertip crosses the divider line.
+End: When all the topmost knuckles goe below the blue line. 
+"""
+
 def get_box(frame, box_detector: BoxDetector, width, height):
     """
     Detects keypoints for a box on the frame and returns y-coordinates for two thresholds.
@@ -19,7 +30,9 @@ def get_box(frame, box_detector: BoxDetector, width, height):
     if ok:
         above_threshold_y = box_detection['Front divider top'][1]
         below_threshold_y = min(box_detection['Back top left'][1], box_detection['Back top right'][1])
-        return above_threshold_y, below_threshold_y
+        divider_line_x = (box_detection['Front divider top'][0] + box_detection['Back divider top'][0]) / 2
+
+        return above_threshold_y, below_threshold_y, divider_line_x
     elif box_detection is not None and not ok:
         # If detection was partial, try to guess missing keypoints
         box_detection = box_detector.guess_missing_keypoints(
@@ -32,16 +45,18 @@ def get_box(frame, box_detector: BoxDetector, width, height):
             # From guessed points
             above_threshold_y = box_detection['Front divider top'][1]
             below_threshold_y = min(box_detection['Back top left'][1], box_detection['Back top right'][1])
-            return above_threshold_y, below_threshold_y
+            divider_line_x = (box_detection['Front divider top'][0] + box_detection['Back divider top'][0]) / 2
+            
+            return above_threshold_y, below_threshold_y,divider_line_x
         else:
             # If guessing also fails
             return 0, 0 # Return default values
     else:
         # If no box_detection at all
-        return 0, 0 # Return default values
+        return 0, 0, 0 # Return default values
 
 
-def draw_thresholds(frame, above_threshold_y, below_threshold_y):
+def draw_thresholds(frame, above_threshold_y, below_threshold_y, divider_threshold_x):
     """
     Draws a red horizontal line with "ABOVE THRESHOLD" text and a blue horizontal line
     with "BELOW THRESHOLD" text on the given frame. Text color matches line color.
@@ -61,6 +76,7 @@ def draw_thresholds(frame, above_threshold_y, below_threshold_y):
     # Define colors in BGR format
     RED = (0, 0, 255)   # (Blue, Green, Red)
     BLUE = (255, 0, 0)  # (Blue, Green, Red)
+    GREEN = (0,255,0) 
     
     # Line thickness
     line_thickness = 2
@@ -109,6 +125,9 @@ def draw_thresholds(frame, above_threshold_y, below_threshold_y):
         below_text_y_pos = below_text_y_baseline_option1
 
     cv2.putText(frame, below_text, (text_x_start, below_text_y_pos), font, font_scale, BLUE, font_thickness, cv2.LINE_AA)
+
+    # Draw green divider line
+    cv2.line(frame, (divider_threshold_x,0), (divider_threshold_x, height-1), GREEN, line_thickness)
 
     return frame
 
@@ -178,6 +197,7 @@ def main():
     # Initialize default threshold lines (will be updated by get_box)
     above_line_y = 0
     below_line_y = frame_height # Set to bottom of frame initially
+    divider_line_x = 0
     
     # Create CSV file with headers if it doesn't exist
     if not os.path.exists(csv_file):
@@ -233,12 +253,13 @@ def main():
         
         # Update box keypoints at specified interval (e.g., every 300 frames)
         if current_frame % 300 == 0:
-            above_line_y_float, below_line_y_float = get_box(frame, box_detector, frame_width, frame_height)
+            above_line_y_float, below_line_y_float, divider_line_x = get_box(frame, box_detector, frame_width, frame_height)
             above_line_y = int(above_line_y_float)
             below_line_y = int(below_line_y_float)
-            
+            divider_line_x = int(divider_line_x)
+
         # Draw the threshold lines on the frame
-        frame = draw_thresholds(frame, above_line_y, below_line_y)
+        frame = draw_thresholds(frame, above_line_y, below_line_y, divider_line_x)
       
         # Calculate current time in seconds
         current_time = current_frame / fps
