@@ -5,7 +5,8 @@ import csv
 import sys
 import os
 from pathlib import Path
-from keypoint_detector import BoxDetector # Assuming this module is available
+# Assuming keypoint_detector.py exists in the same directory or is importable
+from keypoint_detector import BoxDetector 
 
 """
 TODO:
@@ -50,7 +51,7 @@ def get_box(frame, box_detector: BoxDetector, width, height):
             return above_threshold_y, below_threshold_y,divider_line_x
         else:
             # If guessing also fails
-            return 0, 0 # Return default values
+            return 0, 0, 0 # Return default values
     else:
         # If no box_detection at all
         return 0, 0, 0 # Return default values
@@ -66,6 +67,7 @@ def draw_thresholds(frame, above_threshold_y, below_threshold_y, divider_thresho
         frame (np.array): The OpenCV image (frame) to draw on.
         above_threshold_y (int): The Y-coordinate for the red line.
         below_threshold_y (int): The Y-coordinate for the blue line.
+        divider_threshold_x (int): The X-coordinate for the green vertical divider line.
 
     Returns:
         np.array: The frame with the lines and text drawn.
@@ -144,7 +146,7 @@ def main():
         print(f"Error: Video file '{video_path}' not found.")
         sys.exit(1)
     
-    video_name = video_path.split('/')[-1].split('.')[0] # Extract filename only without path or extensions
+    video_name = Path(video_path).stem # Use pathlib for robust filename extraction
     print(f"Processing video: {video_name}")
 
     # Initialize BoxDetector
@@ -173,8 +175,10 @@ def main():
     print(f"Video loaded: {video_path}")
     print(f"FPS: {fps}, Total frames: {total_frames}")
     print("\nControls:")
-    print("- Press 'k' to advance frame")
-    print("- Press 'j' to rewind frame (and undo last recorded attempt if rewound past it)")
+    print("- Press 'k' to advance frame (+1)")
+    print("- Press 'l' to advance frames (+10)") # New control
+    print("- Press 'j' to rewind frame (-1, with undo logic)")
+    print("- Press 'h' to rewind frames (-10)") # New control
     print("- Press '1' to mark attempt start")
     print("- Press '2' to mark cross frame (e.g., when fingers cross the plane)")
     print("- Press '3' to mark attempt end (and save current attempt to CSV)")
@@ -265,7 +269,8 @@ def main():
         current_time = current_frame / fps
         
         # Display control messages
-        control_text = "k: advance | j: rewind | 1: start | 2: cross | 3: end | q: quit" 
+        # Updated control text with 'h' and 'l'
+        control_text = "k: +1 | l: +10 | j: -1 | h: -10 | 1: start | 2: cross | 3: end | q: quit" 
         cv2.putText(frame, control_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         
         # Display frame info on the frame
@@ -301,6 +306,14 @@ def main():
         elif key == ord('k'):
             # Advance one frame.
             current_frame += 1
+            print(f"Advanced to frame {current_frame}")
+        elif key == ord('l'):
+            # Advance 10 frames
+            new_frame = current_frame + 10
+            # Ensure new_frame does not exceed total_frames
+            current_frame = min(total_frames - 1, new_frame) 
+            cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame)
+            print(f"Advanced to frame {current_frame}")
         elif key == ord('1'):
             # Mark attempt start
             attempt_start_frame = current_frame
@@ -360,7 +373,7 @@ def main():
             else:
                 print("Warning: Press '1' first to mark attempt start before pressing '3'")
         elif key == ord('j'):
-            # Rewind frame
+            # Rewind one frame (with undo logic for recorded attempts)
             if current_frame > 0:
                 new_frame = current_frame - 1
                 
@@ -409,6 +422,13 @@ def main():
             else:
                 print("Already at the beginning of the video")
                 # Do not decrement current_frame if already at 0
+        elif key == ord('h'):
+            # Rewind 10 frames
+            new_frame = current_frame - 10
+            # Ensure new_frame does not go below 0
+            current_frame = max(0, new_frame)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame)
+            print(f"Rewound to frame {current_frame}")
         else:
             # For any other key, do nothing.
             pass
