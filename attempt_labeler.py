@@ -256,7 +256,7 @@ def main():
             break
         
         # Update box keypoints at specified interval (e.g., every 300 frames)
-        if current_frame % 300 == 0:
+        if current_frame % 3000 == 0:
             above_line_y_float, below_line_y_float, divider_line_x = get_box(frame, box_detector, frame_width, frame_height)
             above_line_y = int(above_line_y_float)
             below_line_y = int(below_line_y_float)
