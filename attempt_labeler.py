@@ -9,10 +9,6 @@ from pathlib import Path
 from keypoint_detector import BoxDetector 
 
 """
-TODO:
-Make crossing line
-
-
 DEFINITIONS FOR WHEN TO START MARKING
 Start: When the whole hand leaves the red line.
 Crossing: When any one knuckle or fingertip crosses the divider line.
@@ -171,7 +167,12 @@ def main():
     frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     
-    
+    # Handle empty video (0 frames)
+    if total_frames == 0:
+        print("Error: Video contains 0 frames. Exiting.")
+        cap.release()
+        sys.exit(1)
+
     print(f"Video loaded: {video_path}")
     print(f"FPS: {fps}, Total frames: {total_frames}")
     print("\nControls:")
@@ -193,7 +194,7 @@ def main():
     cross_time = None
     current_frame = 0
     
-    csv_file = f"{video_name}_attempt_ground_truths.csv"
+    csv_file = f"./outputs/attempt_labels/{video_name}_attempt_ground_truths.csv"
     recorded_message = None
     recorded_message_timer = 0
     recorded_attempts = []  # Store completed attempts to track for deletion and rewriting
@@ -205,6 +206,7 @@ def main():
     
     # Create CSV file with headers if it doesn't exist
     if not os.path.exists(csv_file):
+        os.makedirs(os.path.dirname(csv_file), exist_ok=True) # Ensure output directory exists
         with open(csv_file, 'w', newline='') as f:
             writer = csv.writer(f)
             writer.writerow(['attempt_number', 'attempt_start_time', 'attempt_end_time', 
@@ -244,19 +246,34 @@ def main():
             print(f"Loaded {len(recorded_attempts)} existing attempts. Continuing from attempt {attempt_number}.")
             # Set current_frame to end of last recorded attempt to continue from there
             current_frame = recorded_attempts[-1]['end_frame']
+            # Ensure current_frame doesn't exceed total_frames-1
+            current_frame = min(current_frame, total_frames - 1) 
             cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame)
 
 
     while True:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame) # Ensure correct frame is read after 'j' or initialization
+        # Ensure correct frame is read after 'j', 'h' or initialization
+        # Also ensures we don't try to seek beyond the last frame for reading
+        cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame)
         ret, frame = cap.read()
         
         if not ret:
-            print("End of video reached.")
-            break
+            # We have reached or overshot the end of the video.
+            # Set current_frame to the last valid frame and re-read it.
+            print("End of video reached. Staying on the last frame. Press 'q' to quit or 'j'/'h' to rewind.")
+            current_frame = total_frames - 1 # Go back to the last valid frame
+            cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame)
+            ret, frame = cap.read() # Re-read the last frame to ensure 'frame' is valid
+            
+            if not ret: # If even re-reading the last frame fails, something is very wrong.
+                print("Critical Error: Could not retrieve last frame. Exiting.")
+                break # This is an unrecoverable error.
+
+            # Do NOT break here. Continue to display and wait for input.
+            # The user can still press 'q' or rewind.
         
         # Update box keypoints at specified interval (e.g., every 300 frames)
-        if current_frame % 3000 == 0:
+        if current_frame % 5000 == 0:
             above_line_y_float, below_line_y_float, divider_line_x = get_box(frame, box_detector, frame_width, frame_height)
             above_line_y = int(above_line_y_float)
             below_line_y = int(below_line_y_float)
@@ -304,14 +321,18 @@ def main():
             break
         elif key == ord('k'):
             # Advance one frame.
-            current_frame += 1
-            print(f"Advanced to frame {current_frame}")
+            new_frame = current_frame + 1
+            if new_frame >= total_frames: # Ensure we don't go past the last frame
+                current_frame = total_frames - 1
+                print("Already at the end of the video. Cannot advance further.")
+            else:
+                current_frame = new_frame
+                print(f"Advanced to frame {current_frame}")
         elif key == ord('l'):
             # Advance 10 frames
             new_frame = current_frame + 10
-            # Ensure new_frame does not exceed total_frames
+            # Ensure new_frame does not exceed total_frames - 1
             current_frame = min(total_frames - 1, new_frame) 
-            cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame)
             print(f"Advanced to frame {current_frame}")
         elif key == ord('1'):
             # Mark attempt start
@@ -385,11 +406,9 @@ def main():
                                            attempt_start_time, cross_frame, cross_time, 
                                            recorded_message, recorded_message_timer, csv_file)
                 
-                cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame)
                 print(f"Rewound to frame {current_frame}")
             else:
                 print("Already at the beginning of the video")
-                # Do not decrement current_frame if already at 0
         elif key == ord('h'):
             # Rewind 10 frames (with undo logic for recorded attempts)
             if current_frame > 0:
@@ -404,7 +423,6 @@ def main():
                                            attempt_start_time, cross_frame, cross_time, 
                                            recorded_message, recorded_message_timer, csv_file)
                 
-                cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame)
                 print(f"Rewound to frame {current_frame}")
             else:
                 print("Already at the beginning of the video")
@@ -443,6 +461,9 @@ def handle_rewind_and_undo(new_frame, current_frame, recorded_attempts,
             print(f"Attempt {attempt['number']} erased - rewound past its end frame {attempt['end_frame']}")
         
         # Rewrite entire CSV file without the removed attempts
+        # This will recreate the file if it was deleted due to all attempts being removed.
+        # Make sure the directory exists before writing.
+        os.makedirs(os.path.dirname(csv_file), exist_ok=True) 
         with open(csv_file, 'w', newline='') as f:
             writer = csv.writer(f)
             writer.writerow(['attempt_number', 'attempt_start_time', 'attempt_end_time', 

@@ -23,7 +23,7 @@ def main():
     
     # Create output CSV filename
     csv_name = os.path.splitext(os.path.basename(csv_file))[0]
-    output_csv = f"{csv_name}_ground_truth.csv"
+    output_csv = f"./outputs/attempt_classifications/{csv_name}_ground_truth.csv"
     
     # Read the input CSV
     try:
