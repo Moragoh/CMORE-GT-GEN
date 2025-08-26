@@ -2,8 +2,6 @@
 **/*.mp4
 **/*.mov
 
-**/*.csv
-
 venv
 
 **/.DS_Store

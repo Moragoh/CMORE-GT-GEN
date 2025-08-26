@@ -279,6 +279,8 @@ def main():
             below_line_y = int(below_line_y_float)
             divider_line_x = int(divider_line_x)
 
+        
+
         # Draw the threshold lines on the frame
         frame = draw_thresholds(frame, above_line_y, below_line_y, divider_line_x)
       
