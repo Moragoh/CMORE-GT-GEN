@@ -24,11 +24,11 @@ source venv/bin/activate
 ```
 2) Run
 ```
-python3 label_generator.py [path to video file]
+python3 attempt_labeler.py [path to video file]
 ```
 For instance, if I wanted to run the label generator on test.mp4 which is in the same directory is label_generator.py, I would run:
 ```
-python3 label_generator.py test.mp4
+python3 attempt_labeler.py test.mp4
 ```
 3) A new window will pop up, allowing you to review the video frame-by-frame.
 4) Press any key to advance a frame (you can also hold any key to rapidly advance through frames).
